@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Viewer</title>
+</head>
+<body>
+  <h1>Viewer</h1>
+  <video id="video" autoplay playsinline></video>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+  <script>
+    const socket = io();
+    const video = document.getElementById('video');
+
+    socket.emit('viewer');
+
+    let peer = null;
+
+    socket.on('signal', ({ signal, sender }) => {
+      if (!peer) {
+        peer = new SimplePeer({ initiator: false, trickle: false });
+
+        peer.on('signal', signal => {
+          socket.emit('signal', { target: sender, signal });
+        });
+
+        peer.on('stream', stream => {
+          video.srcObject = stream;
+        });
+
+        peer.on('error', err => console.error('Peer error:', err));
+      }
+
+      peer.signal(signal);
+    });
+  </script>
+</body>
+</html>

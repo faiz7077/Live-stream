@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Broadcaster</title>
+</head>
+<body>
+  <h1>Broadcaster</h1>
+  <video id="video" autoplay muted playsinline></video>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+  <script>
+    const socket = io();
+    const video = document.getElementById('video');
+    const peers = {};
+
+    socket.emit('broadcaster');
+
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+      video.srcObject = stream;
+
+      socket.on('viewer:request', viewerId => {
+        const peer = new SimplePeer({
+          initiator: true,
+          trickle: false,
+          stream: stream
+        });
+
+        peer.on('signal', signal => {
+          socket.emit('signal', { target: viewerId, signal });
+        });
+
+        peer.on('error', err => console.error('Peer error:', err));
+
+        peers[viewerId] = peer;
+      });
+
+      socket.on('signal', ({ signal, sender }) => {
+        const peer = peers[sender];
+        if (peer) {
+          peer.signal(signal);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
