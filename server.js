@@ -12,7 +12,7 @@ let broadcasterSocketId = null;
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve broadcaster page
-app.get('/broadcaster', (req, res) => {
+app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'broadcaster.html'));
 });
 
