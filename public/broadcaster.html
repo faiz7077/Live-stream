@@ -1,3 +1,4 @@
+<!-- 
 <!DOCTYPE html>
 <html>
 <head>
@@ -40,6 +41,106 @@
           peer.signal(signal);
         }
       });
+    });
+  </script>
+</body>
+</html> -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Broadcaster</title>
+  <style>
+    #controls {
+      margin-bottom: 10px;
+    }
+    button {
+      margin-right: 10px;
+      padding: 8px 16px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Broadcaster</h1>
+
+  <div id="controls">
+    <button id="startBtn">Start Stream</button>
+    <button id="endBtn" disabled>End Stream</button>
+  </div>
+
+  <video id="video" autoplay muted playsinline style="width: 600px;"></video>
+
+  <h2>Messages from Viewer:</h2>
+  <ul id="chatMessages"></ul>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+  <script>
+    const socket = io();
+    const video = document.getElementById('video');
+    const chatMessages = document.getElementById('chatMessages');
+    const startBtn = document.getElementById('startBtn');
+    const endBtn = document.getElementById('endBtn');
+
+    let stream = null;
+    const peers = {};
+
+    startBtn.addEventListener('click', async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        video.srcObject = stream;
+
+        socket.emit('broadcaster');
+
+        socket.on('viewer:request', viewerId => {
+          const peer = new SimplePeer({
+            initiator: true,
+            trickle: false,
+            stream: stream
+          });
+
+          peer.on('signal', signal => {
+            socket.emit('signal', { target: viewerId, signal });
+          });
+
+          peer.on('error', err => console.error('Peer error:', err));
+
+          peers[viewerId] = peer;
+        });
+
+        socket.on('signal', ({ signal, sender }) => {
+          const peer = peers[sender];
+          if (peer) {
+            peer.signal(signal);
+          }
+        });
+
+        socket.on('chat:message', (msg) => {
+          const li = document.createElement('li');
+          li.textContent = msg;
+          chatMessages.appendChild(li);
+        });
+
+        startBtn.disabled = true;
+        endBtn.disabled = false;
+      } catch (err) {
+        console.error('Error starting stream:', err);
+        alert('Could not access camera/mic.');
+      }
+    });
+
+    endBtn.addEventListener('click', () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+      }
+
+      // Close all peer connections
+      Object.values(peers).forEach(peer => peer.destroy());
+      for (let id in peers) delete peers[id];
+
+      startBtn.disabled = false;
+      endBtn.disabled = true;
     });
   </script>
 </body>

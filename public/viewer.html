@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html>
 <head>
   <title>Viewer</title>
@@ -35,4 +35,72 @@
     });
   </script>
 </body>
-</html>
+</html> --><!DOCTYPE html>
+<html>
+  <head>
+    <title>Viewer</title>
+    <style>
+      #controls {
+        margin-top: 10px;
+      }
+      input, button {
+        font-size: 16px;
+        padding: 6px 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Viewer</h1>
+    <video id="video" autoplay playsinline style="width: 600px;"></video>
+  
+    <div id="controls">
+      <input type="text" id="messageInput" placeholder="Type a message..." />
+      <button id="sendBtn">Send</button>
+    </div>
+  
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script>
+      const socket = io();
+      const video = document.getElementById('video');
+      const messageInput = document.getElementById('messageInput');
+      const sendBtn = document.getElementById('sendBtn');
+  
+      socket.emit('viewer');
+  
+      let peer = null;
+  
+      socket.on('signal', ({ signal, sender }) => {
+        if (!peer) {
+          peer = new SimplePeer({ initiator: false, trickle: false });
+  
+          peer.on('signal', signal => {
+            socket.emit('signal', { target: sender, signal });
+          });
+  
+          peer.on('stream', stream => {
+            video.srcObject = stream;
+          });
+  
+          peer.on('error', err => console.error('Peer error:', err));
+        }
+  
+        peer.signal(signal);
+      });
+  
+      sendBtn.addEventListener('click', () => {
+        const msg = messageInput.value.trim();
+        if (msg) {
+          socket.emit('chat:message', msg);
+          messageInput.value = '';
+        }
+      });
+  
+      // Optional: Pressing Enter also sends the message
+      messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendBtn.click();
+      });
+    </script>
+  </body>
+  </html>
+  
