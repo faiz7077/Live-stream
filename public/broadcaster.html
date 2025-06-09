@@ -45,7 +45,7 @@
   </script>
 </body>
 </html> -->
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html>
 <head>
   <title>Broadcaster</title>
@@ -141,6 +141,214 @@
 
       startBtn.disabled = false;
       endBtn.disabled = true;
+    });
+  </script>
+</body>
+</html> -->
+
+
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Broadcaster</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    video {
+      width: 80%;
+      margin: 20px 0;
+      border: 2px solid #00bcd4;
+      border-radius: 10px;
+    }
+    button {
+      margin: 5px;
+      padding: 10px 20px;
+      background-color: #00bcd4;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background-color: #555;
+      cursor: not-allowed;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+      margin-top: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      width: 80%;
+    }
+    li {
+      background-color: #1e1e1e;
+      padding: 8px;
+      margin-bottom: 5px;
+      border-radius: 5px;
+    }
+    #status {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 5px;
+      background-color: #1e1e1e;
+    }
+  </style>
+</head>
+<body>
+  <h1>Broadcaster</h1>
+  <video id="video" autoplay muted playsinline></video>
+  <div id="status">Status: Not streaming</div>
+  <div>
+    <button id="startBtn">Start Stream</button>
+    <button id="endBtn" disabled>End Stream</button>
+  </div>
+  <h2>Viewer Messages:</h2>
+  <ul id="chatMessages"></ul>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+  <script>
+    const socket = io();
+    const video = document.getElementById('video');
+    const chatMessages = document.getElementById('chatMessages');
+    const startBtn = document.getElementById('startBtn');
+    const endBtn = document.getElementById('endBtn');
+    const status = document.getElementById('status');
+
+    let stream = null;
+    const peers = {};
+
+    // Update status
+    function updateStatus(message) {
+      status.textContent = `Status: ${message}`;
+      console.log(message);
+    }
+
+    startBtn.addEventListener('click', async () => {
+      try {
+        updateStatus('Requesting media access...');
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { width: 640, height: 480 }, 
+          audio: true 
+        });
+        
+        video.srcObject = stream;
+        updateStatus('Media acquired, registering as broadcaster...');
+        
+        // Register as broadcaster
+        socket.emit('broadcaster');
+        
+        startBtn.disabled = true;
+        endBtn.disabled = false;
+        updateStatus('Broadcasting - waiting for viewers...');
+        
+      } catch (err) {
+        console.error('Stream error:', err);
+        updateStatus('Error: Could not access media devices');
+        alert('Could not access media devices. Please check permissions.');
+      }
+    });
+
+    // Handle viewer connection requests
+    socket.on('viewer', (viewerId) => {
+      console.log('New viewer connected:', viewerId);
+      updateStatus(`Broadcasting to ${Object.keys(peers).length + 1} viewer(s)`);
+      
+      if (stream) {
+        const peer = new SimplePeer({ 
+          initiator: true, 
+          trickle: false, 
+          stream: stream 
+        });
+
+        peer.on('signal', (signal) => {
+          console.log('Sending signal to viewer:', viewerId);
+          socket.emit('signal', { target: viewerId, signal: signal });
+        });
+
+        peer.on('error', (err) => {
+          console.error('Peer error with viewer', viewerId, ':', err);
+          delete peers[viewerId];
+          updateStatus(`Broadcasting to ${Object.keys(peers).length} viewer(s)`);
+        });
+
+        peer.on('close', () => {
+          console.log('Peer connection closed with viewer:', viewerId);
+          delete peers[viewerId];
+          updateStatus(`Broadcasting to ${Object.keys(peers).length} viewer(s)`);
+        });
+
+        peers[viewerId] = peer;
+      }
+    });
+
+    // Handle signals from viewers
+    socket.on('signal', ({ signal, sender }) => {
+      console.log('Received signal from viewer:', sender);
+      const peer = peers[sender];
+      if (peer) {
+        peer.signal(signal);
+      }
+    });
+
+    // Handle chat messages from viewers
+    socket.on('chat:message', (data) => {
+      const li = document.createElement('li');
+      li.textContent = `Viewer: ${data.message || data}`;
+      chatMessages.appendChild(li);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    });
+
+    // Handle viewer disconnection
+    socket.on('viewer:disconnect', (viewerId) => {
+      console.log('Viewer disconnected:', viewerId);
+      if (peers[viewerId]) {
+        peers[viewerId].destroy();
+        delete peers[viewerId];
+      }
+      updateStatus(`Broadcasting to ${Object.keys(peers).length} viewer(s)`);
+    });
+
+    endBtn.addEventListener('click', () => {
+      updateStatus('Ending stream...');
+      
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+      }
+
+      // Destroy all peer connections
+      Object.values(peers).forEach(peer => peer.destroy());
+      for (let id in peers) delete peers[id];
+
+      // Clear chat
+      chatMessages.innerHTML = '';
+
+      // Notify server that broadcast ended
+      socket.emit('end-broadcast');
+
+      startBtn.disabled = false;
+      endBtn.disabled = true;
+      updateStatus('Not streaming');
+    });
+
+    // Handle connection events
+    socket.on('connect', () => {
+      updateStatus('Connected to server');
+    });
+
+    socket.on('disconnect', () => {
+      updateStatus('Disconnected from server');
     });
   </script>
 </body>
