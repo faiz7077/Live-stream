@@ -34,8 +34,9 @@
       peer.signal(signal);
     });
   </script>
-</body>
-</html> --><!DOCTYPE html>
+ </body>
+ </html> --> 
+ <!-- <!DOCTYPE html> 
 <html>
   <head>
     <title>Viewer</title>
@@ -103,4 +104,169 @@
     </script>
   </body>
   </html>
-  
+   --> 
+
+   
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Viewer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f3f3f3;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    video {
+      width: 80%;
+      margin-bottom: 10px;
+      border: 2px solid #2196f3;
+      border-radius: 10px;
+      background-color: #000;
+    }
+    #controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    input, button {
+      font-size: 16px;
+      padding: 8px 12px;
+      border: 1px solid #2196f3;
+      border-radius: 5px;
+    }
+    button {
+      background-color: #2196f3;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #1976d2;
+    }
+    #status {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 5px;
+      background-color: #e3f2fd;
+      border: 1px solid #2196f3;
+    }
+  </style>
+</head>
+<body>
+  <h1>Viewer</h1>
+  <video id="video" autoplay playsinline controls></video>
+  <div id="status">Status: Connecting...</div>
+  <div id="controls">
+    <input type="text" id="messageInput" placeholder="Type a message..." />
+    <button id="sendBtn">Send</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+  <script>
+    const socket = io();
+    const video = document.getElementById('video');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const status = document.getElementById('status');
+
+    let peer = null;
+
+    // Update status
+    function updateStatus(message) {
+      status.textContent = `Status: ${message}`;
+      console.log(message);
+    }
+
+    // Connect as viewer when page loads
+    socket.on('connect', () => {
+      updateStatus('Connected to server, waiting for broadcaster...');
+      socket.emit('viewer');
+    });
+
+    // Handle signals from broadcaster
+    socket.on('signal', ({ signal, sender }) => {
+      console.log('Received signal from broadcaster:', sender);
+      
+      if (!peer) {
+        // Create peer connection as non-initiator (viewer)
+        peer = new SimplePeer({ 
+          initiator: false, 
+          trickle: false 
+        });
+
+        peer.on('signal', (signal) => {
+          console.log('Sending signal back to broadcaster');
+          socket.emit('signal', { target: sender, signal: signal });
+        });
+
+        peer.on('stream', (stream) => {
+          console.log('Received stream from broadcaster');
+          video.srcObject = stream;
+          updateStatus('Connected - receiving stream');
+        });
+
+        peer.on('error', (err) => {
+          console.error('Peer error:', err);
+          updateStatus('Connection error');
+          peer = null;
+        });
+
+        peer.on('close', () => {
+          console.log('Peer connection closed');
+          updateStatus('Broadcaster disconnected');
+          video.srcObject = null;
+          peer = null;
+        });
+      }
+
+      // Process the signal
+      peer.signal(signal);
+    });
+
+    // Handle chat functionality
+    sendBtn.addEventListener('click', () => {
+      const msg = messageInput.value.trim();
+      if (msg) {
+        socket.emit('chat:message', { message: msg });
+        messageInput.value = '';
+      }
+    });
+
+    messageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendBtn.click();
+      }
+    });
+
+    // Handle connection events
+    socket.on('disconnect', () => {
+      updateStatus('Disconnected from server');
+      if (peer) {
+        peer.destroy();
+        peer = null;
+      }
+      video.srcObject = null;
+    });
+
+    // Handle broadcast end
+    socket.on('broadcast:ended', () => {
+      updateStatus('Broadcast ended');
+      if (peer) {
+        peer.destroy();
+        peer = null;
+      }
+      video.srcObject = null;
+    });
+
+    // Handle no broadcaster available
+    socket.on('no-broadcaster', () => {
+      updateStatus('No broadcaster available');
+    });
+  </script>
+</body>
+</html> 
