@@ -142,11 +142,11 @@ const io = socketIo(server, {
 app.use(express.static('public'));
 
 app.get('/broadcaster', (req, res) => {
-  res.sendFile(path.join(__dirname, 'broadcaster.html'));
+  res.sendFile(path.join(__dirname, 'public','broadcaster.html'));
 });
 
 app.get('/viewer', (req, res) => {
-  res.sendFile(path.join(__dirname, 'viewer.html'));
+  res.sendFile(path.join(__dirname, 'public','viewer.html'));
 });
 
 app.get('/', (req, res) => {
